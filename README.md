@@ -41,3 +41,13 @@ closest competitor. Sidero has the best engineering and the narrowest scope.
 3. **Day-2 rollout campaigns outside OpenShift** (L11) — only Red Hat's TALM exists
 
 Those three, plus table-stakes tenancy and audited access, is the product.
+
+## Decisions so far
+
+See [12 — Decisions & plan](docs/design/12-decisions-and-plan.md).
+
+- **Beachhead: deferred** — build the generic engine; the first design partner picks the vertical.
+- **GTM: services-first** with a design partner; tooling stays open source.
+- Structurally this means: a **spine** (everything below the vertical, ~80% of the work)
+  plus **packs** (`gpu`, `virt`, `sovereign`) built only when a client pays for one.
+- Guard rail: every hour of client work lands in the spine or a pack. Never a client fork.
