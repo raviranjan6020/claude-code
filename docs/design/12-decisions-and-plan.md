@@ -6,6 +6,7 @@
 |---|---|---|
 | D-1 | Beachhead vertical | **Deferred** — build the generic engine; the first design partner picks the vertical |
 | D-2 | Go-to-market | **Services-first with a design partner** — paid engagement, tooling stays open source |
+| D-3 | Network fabric (L6) | **Verify, never configure.** Host-side LLDP cable-map verification only. No switch write path, ever. Partner/integrate (Netris) when a customer needs the fabric configured. |
 
 These two are one strategy, not two: **the design partner chooses the beachhead, and
 pays us to discover it.** That is a legitimate solo-founder path — it buys hardware
@@ -27,6 +28,74 @@ It also has one specific, well-known failure mode.
 
 ---
 
+## D-3 in full: why we do not build the network fabric
+
+### What changed
+The first draft of doc 09 listed "rack-to-workload in one object" (L6) as a co-equal
+differentiator. That was wrong, for two reasons, and correcting it is the most
+consequential change in this plan.
+
+**Reason 1 — the niche is occupied.** Netris has spent years building exactly this for
+exactly our intended market: a controller + per-switch agents + an XDP-accelerated
+multi-tenant VPC gateway (SoftGate), covering NVIDIA/Cumulus and Dell/EdgeCore/SONiC,
+now extended to BlueField DPUs for per-GPU tenant isolation, with top-tier neocloud
+references. **And Mirantis partners with them** rather than building it into k0rdent.
+When the closest architectural analog to our product chooses to partner on this layer,
+that is a finding, not an opinion.
+
+**Reason 2 — founder fit.** L6's write path demands BGP/EVPN/VXLAN/MLAG fluency, a
+switch-vendor certification matrix, a per-NOS agent, a line-rate data plane, and the
+trust of network teams who gatekeep hard. A non-network founder starting here is
+starting with their weakest hand against an incumbent's strongest.
+
+### Why L3 (firmware) is the correct wedge for *this* founder
+
+| | **L3 — firmware/BIOS/RAID** | **L6 — fabric write path** |
+|---|---|---|
+| Nature of the problem | API + data: Redfish, vendor CLIs, a quirks table | Protocol + topology + distributed state |
+| Prerequisite expertise | read vendor docs carefully | years of network engineering |
+| Feedback loop | minutes, in a lab, on one node | needs a real fabric and a maintenance window |
+| Blast radius of a bug | one node won't boot; reflash it | a rack or a fabric goes dark |
+| Gatekeeper to get started | none — you own the server | the network team must approve you |
+| What it rewards | **persistence and rigour** | deep domain intuition |
+| Incumbent | **none** | Netris, well-funded, NVIDIA-aligned |
+| Moat shape | a quirks DB that **compounds** per vendor/generation | protocol coverage + certifications |
+
+L3 is the rare layer where the moat is built by *grinding* — every Dell generation,
+every iDRAC firmware revision, every Supermicro quirk you encode is permanent value
+nobody can shortcut. That is exactly the kind of moat a solo founder with an AI pair
+can actually build, and exactly the kind a large vendor won't staff because it's
+unglamorous.
+
+### What we keep from L6 (and it is genuinely cheap)
+
+**Host-side LLDP cable-map verification.** During Ironic/discovery-ramdisk inspection,
+`lldpd` already reports each NIC's switch neighbour and port. We record it on the
+`Machine`, diff it against `spec.fabric`, and surface a condition:
+
+```
+  FabricMismatch: eno2 reports leaf-r07-b/Ethernet1/19, inventory expects Ethernet1/12.
+  Likely miscabled. (LLDP observed 2026-09-19T11:04Z)
+```
+
+No switch credentials. No network-team approval. No protocol drivers. No writes. It is
+parsing, roughly two weeks of work, and it catches the most common and most
+time-wasting error in datacenter bring-up. The `Machine.spec.fabric` block in doc 10
+**stays in the API** — it just becomes *asserted intent we verify and can hand to
+someone else*, rather than something we apply.
+
+### The integration path
+When a customer needs the fabric actually configured, we export the verified topology
+(machine → NIC → switch → port → intended VLAN/LAG) over an API to **Netris**, to their
+existing Ansible, or to Nautobot as source of truth. Being the system that *knows the
+truth about the physical topology* is a good position; being the system that writes to
+their switches is a fight we would lose.
+
+**Revisit trigger:** only if a design partner has no fabric automation, explicitly asks
+us to own it, and will fund a network engineer to do it. Not before.
+
+---
+
 ## What "stay unfocused" actually means in code
 
 Unfocused at the **pack** level. Ruthlessly focused on the **spine**.
@@ -42,7 +111,7 @@ here is GPU-specific, VM-specific or sovereign-specific:
 | **L3** | `HardwareProfile` — firmware/BIOS/RAID desired state, drift, attestation |
 | L4 | bootc image build + sign + mirror; Redfish virtual-media deploy |
 | L5 | `NetworkProfile` — nmstate rendered from IPAM |
-| L6 | `forge-fabric` read-only: LLDP ingest, cable-map verification, config diff |
+| L6 | LLDP cable-map **verification only** (host-side). No switch writes — see D-3 |
 | L7 | `ClusterTemplate` / `Cluster` → CAPI → RKE2 (+ k3s, Talos classes) |
 | L8 | Cilium, MetalLB, Rook/Longhorn as default addons |
 | L9 | `AddonTemplate` / `AddonOverlay` via Sveltos + Flux |

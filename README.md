@@ -50,4 +50,5 @@ See [12 — Decisions & plan](docs/design/12-decisions-and-plan.md).
 - **GTM: services-first** with a design partner; tooling stays open source.
 - Structurally this means: a **spine** (everything below the vertical, ~80% of the work)
   plus **packs** (`gpu`, `virt`, `sovereign`) built only when a client pays for one.
+- **Network fabric: verify, never configure.** Host-side LLDP cable-map verification only; partner for the write path.
 - Guard rail: every hour of client work lands in the spine or a pack. Never a client fork.

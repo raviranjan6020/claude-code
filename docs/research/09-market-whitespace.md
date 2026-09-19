@@ -30,12 +30,15 @@ BIOS settings across a pool are a top cause of "one node performs differently",
 firmware bugs are a top cause of NIC/NVMe/GPU flapping, and pre-deployment firmware
 baselining is a hard requirement in every serious DC runbook.
 
-### 🎯 Gap 2 — L6: Network fabric co-provisioning
+### ⚠️ Gap 2 — L6: Network fabric co-provisioning — **REVISED, see below**
 The server is automated in 20 minutes; the switch port is a change ticket that takes
-two weeks. Declaring server + switch port + VLAN + BGP + MLAG **in one object** —
-with NetBox/Nautobot as the source of truth and gNMI/NETCONF/OpenConfig (plus SONiC,
-Arista eAPI, Cisco NX-API, Junos) as the drivers — is a genuinely unsolved problem in
-this product category and a visceral pain for the buyer.
+two weeks. Declaring server + switch port + VLAN + BGP + MLAG in one object is a
+visceral pain for the buyer, and none of the *Kubernetes-on-metal* vendors in the table
+above touch it.
+
+**But it is not an unserved gap — it is served by a specialist.** See
+[Gap 2, corrected](#gap-2-corrected--the-fabric-layer-is-already-taken) below. This was
+an error in the first draft of this analysis and it materially changes the plan.
 
 ### 🎯 Gap 3 — L11 day-2 rollout outside OpenShift
 TALM-class rollout campaigns (canary + batch + pre-cache + backup + verify + abort +
@@ -48,6 +51,49 @@ Plus the softer one:
 Rafay has tenancy but no metal. Red Hat/SUSE have metal but weak tenancy (no per-tenant
 metal pools, no secure-erase-between-tenants workflow, no GPU-hour billing). A company
 whose *business* is selling compute must have both, and currently assembles it by hand.
+
+---
+
+## Gap 2, corrected — the fabric layer is already taken
+
+**Netris** (netris.io) occupies exactly the L6-for-AI-infrastructure niche, and has for
+years. Their "NAAM" (Network Automation, Abstraction and Multi-Tenancy) platform:
+
+- A **Netris Controller** (3+ bare-metal nodes, runs in the customer's environment)
+  holding intent, inventory, policy and telemetry.
+- A **Netris Switch Agent** on every managed switch applying intent locally.
+- **SoftGate** — a multi-tenant, horizontally scalable VPC gateway on commodity x86 with
+  an **XDP-accelerated C data plane**: elastic IPs, NAT, L4 load balancing, per-tenant
+  north-south connectivity.
+- Switch coverage via **Cumulus Linux** (all NVIDIA/Spectrum-X switches) and **SONiC**
+  (Dell, EdgeCore); also acts as fabric manager for Arista and Dell.
+- **NVIDIA BlueField DPU** orchestration (v4.7, April 2026) for hardware-level tenant
+  isolation "from full rack-scale GPU clusters down to individual GPUs in a server."
+- Kubernetes-native: VPC abstractions exposed as K8s APIs.
+- Reference customers include **Lightning AI** (a top-3 neocloud), phoenixNAP, and
+  NVIDIA Cloud Partners.
+
+**And the decisive data point:** Netris has a **partnership with Mirantis** to unify
+Kubernetes orchestration (k0rdent) with network automation (Netris).
+
+Read that again, because it is the market telling us the answer:
+
+> The compute/metal orchestrator and the network fabric automator are **two different
+> companies that partner**, not one company that builds both.
+
+That is not a coincidence. L6's write path requires BGP/EVPN/VXLAN/MLAG expertise, a
+switch-vendor certification matrix, a per-NOS agent, a line-rate data plane, and the
+trust of network teams who will not let a new vendor near their fabric. It is a
+company-sized problem with a funded, NVIDIA-aligned incumbent holding a multi-year lead.
+
+**Implication for us: do not build the L6 write path. Ever. Partner or integrate.**
+
+**What survives, and is still ours:** the *verification* half of L6, which requires no
+networking expertise and no switch access at all. See the differentiation thesis below.
+
+**Competitive note:** Mirantis + Netris together cover more of our intended pitch than
+either does alone. They remain weak on **L3 (firmware desired state)** and **L11
+(rollout campaigns)** — which is precisely why those, not L6, are the wedge.
 
 ---
 
@@ -101,16 +147,32 @@ Sell door A to AI infra buyers, door B to VMware refugees. Same engine.
 
 ---
 
-## 3. Our differentiation thesis (three claims we must be able to defend)
+## 3. Our differentiation thesis (ranked, not co-equal)
 
-1. **"Provable hardware state."** We own L3 properly: declarative BIOS/firmware/RAID
-   desired state, continuous drift detection, safe ordered remediation, and a signed
-   compliance report per node. Nobody else can produce that report.
-2. **"Rack to workload in one object."** We own L6 enough to configure the switch port
-   with the server: one `Machine` object describes the host *and* its fabric attachment,
-   driven from an inventory source of truth. Cuts real bring-up from weeks to hours.
-3. **"Fleet day-2 that ops teams trust."** TALM-class rollout campaigns for OS +
-   Kubernetes + addons + firmware, on any distro, working air-gapped.
+**#1 — "Provable hardware state." (L3) — this is the wedge.**
+Declarative BIOS/firmware/RAID desired state, continuous drift detection, safe ordered
+remediation, and a **signed compliance attestation per node**. Nobody else can produce
+that report. Everything else in the product is in service of being allowed to sell this.
+
+**#2 — "Fleet day-2 that ops teams trust." (L11)**
+TALM-class rollout campaigns — canary, batch, pre-cache, backup, verify, abort, resume —
+for OS + Kubernetes + addons + firmware, on any distro, working air-gapped. Exists only
+inside Red Hat today.
+
+**#3 — "The cable map is verified." (L6, verification only — a feature, not a pillar)**
+*Not* fabric configuration. We ingest **LLDP from the host side** during inspection —
+`lldpd` in the discovery ramdisk reports "eno1 is attached to leaf-r07-a port
+Ethernet1/12" — and diff it against what inventory claims. This catches miscabling,
+the single most common bring-up error in a datacenter.
+
+Critically, this requires **no switch credentials, no network-team approval, no BGP/EVPN
+knowledge, and no protocol drivers.** It is parsing, not networking. The blast radius is
+zero because we never write anything. It is perhaps two weeks of work and it makes the
+`Machine` object's fabric fields *real* without taking on Netris.
+
+If a customer wants the fabric actually configured, we hand the verified topology to
+**Netris** (or their existing Ansible) over an API. That is the Mirantis model, and it
+is the right one.
 
 Plus the table stakes we must match, not beat: audited zero-trust kubectl, blueprint
 versioning with drift enforcement, multi-tenancy with metering, and an honest open-core
