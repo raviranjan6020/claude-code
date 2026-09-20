@@ -7,6 +7,9 @@
 | D-1 | Beachhead vertical | **Deferred** — build the generic engine; the first design partner picks the vertical |
 | D-2 | Go-to-market | **Services-first with a design partner** — paid engagement, tooling stays open source |
 | D-3 | Network fabric (L6) | **Verify, never configure.** Host-side LLDP cable-map verification only. No switch write path, ever. Partner/integrate (Netris) when a customer needs the fabric configured. |
+| D-4 | Name | **Ingot.** Repo `github.com/<org>/ingot` (monorepo). API group `ingot.sh/v1alpha1`. Binaries `ingot` (CLI), `ingot-server`, `ingot-agent`. |
+| D-5 | Sequencing | **P2 (platform) MVP first, then P1 (metal + firmware).** Reverses the earlier recommendation — recorded as a founder decision with the risk accepted and mitigated by a hard timebox. |
+| D-6 | Tiers | Named **global / regional / site**. Deploy two, model three. One `ingot-server` binary with `--tier=` selecting controller sets; collapsing tiers is a flag, not a rewrite. |
 
 These two are one strategy, not two: **the design partner chooses the beachhead, and
 pays us to discover it.** That is a legitimate solo-founder path — it buys hardware
@@ -187,29 +190,51 @@ contractor day rates.
 
 ---
 
-## Revised milestones
+## Milestones — superseded by D-5
 
-| # | When | Goal | Output |
-|---|---|---|---|
-| **M0** | weeks 1–4 | **Credibility + competence.** Build the virtual lab; run exercises 1–5 from doc 11; publish the landscape report. | Lab-in-a-box repo; lab journal; published report |
-| **M1** | months 1–3 | **The spine, demoable.** `Site`/`Machine`/`HardwareProfile`/`ClusterTemplate`/`Cluster`; Metal3 virtual-media → bootc → RKE2 → Cilium; one CLI. Single tier. | The recorded 30-minute demo |
-| **M2** | months 3–5 | **The differentiator, on real metal.** `forge-firmware` remediation + quirks DB for Dell iDRAC9 + signed attestation. Rent hardware. | Demo on physical servers with the compliance report |
-| **M3** | months 4–6 | **Win the engagement.** Outreach on the back of M0–M2. | Signed design-partner contract |
-| **M4** | months 6–12 | **Spine hardening + the pack they need.** OCM registration, audited tunnel, `RolloutCampaign`, air-gap bundle, hub/site tier split — plus whichever pack the partner's vertical demands, built *as a pack*. | Running in a customer's DC; support tail begins |
+The milestone table that stood here put the metal/firmware work (P1) before the
+platform work (P2). **D-5 reverses that.** The executable plan now lives in
+[13 — P2 build plan](13-p2-build-plan.md).
 
-**M3 is deliberately parallel to M2, not after it.** Outreach starts the moment the
-virtual-lab demo exists; the physical-metal version closes the deal.
+For the record, the sequencing argument and its risks are preserved below, because
+the risks did not go away when the decision was made — they became things to manage.
 
-**Still explicitly NOT in scope:** Karmada/cross-cluster scheduling, service mesh, a
-marketplace, our own distro/CNI/OS-from-scratch, Windows nodes, telco RAN.
+### Why the original plan led with P1
+- P1 is the only layer with no incumbent, so it is the only defensible asset.
+- Its moat (a vendor/generation quirks database) **compounds by calendar**, so every
+  month it is deferred is permanently lost accumulation.
+- P2 is the most commoditised category in infrastructure: free Rancher, free k0rdent,
+  and eight funded startups. Weaveworks (who created Flux and coined GitOps) wound
+  down in 2024; D2iQ, whose entire product was Kubernetes fleet management, wound down
+  in 2023. The category does not support standalone vendors.
+- "Visible product" logic inverts here: a cluster provisioner is invisible in a crowded
+  field, while "declarative firmware state with signed attestation" is a headline.
 
----
+### Why P2-first was chosen anyway
+- A design partner will not buy P1 alone in a Kubernetes context — "I provisioned your
+  servers, good luck" is not a sale. P2 is what makes the offering a platform.
+- P1 is hardware-blocked; the founder has VMs today and no BMC access.
+- Momentum and morale on a solo project are real inputs, not soft ones.
+
+### The three mitigations that make D-5 survivable
+1. **Hard timebox.** P2 MVP is 10 weeks including chassis. Overrun means cut scope,
+   never extend. Overrun is the tripwire, not a schedule slip.
+2. **Deliberately unoriginal.** No differentiation attempted in P2. One distro (RKE2),
+   one CNI (Cilium), no upgrade hardening, no multi-tenancy, no UI.
+3. **Start the moat's clock early.** Read-only BIOS attribute and firmware-version
+   capture ships inside the P2 MVP (see doc 13), so the quirks dataset begins
+   accumulating in week 4 rather than week 11.
+
+### The exit trigger
+P1 begins when the P2 done-test video exists — **not** when the product feels polished,
+and **not** when anyone else joins. The trigger is scope plus a date, both inside the
+founder's control.
 
 ## Immediate next action
 
-Build the **lab-in-a-box**: one command → libvirt + `sushy-tools` (emulated Redfish
-BMCs *with virtual media*) + Metal3 + CAPM3 + RKE2, so doc 11's exercises 1–5 are cheap
-to repeat and to hand to anyone else later.
+Phase 0 of [doc 13](13-p2-build-plan.md): scaffold the `ingot` monorepo, and stand up
+k3s + Cluster API + CAPA on the hub, then create one EC2 cluster **by hand with
+`clusterctl`** before automating any of it.
 
-It is also the first artifact of the product — the spine's dev environment and its CI
-substrate are the same thing.
+The libvirt + `sushy-tools` lab from doc 11 moves to the start of P1, where it belongs
+now that D-5 has reordered the work.

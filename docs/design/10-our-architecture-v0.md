@@ -1,6 +1,6 @@
 # 10 — Our Reference Architecture, v0 (a strawman to argue with)
 
-Working name: **`forge`** (placeholder). Everything here is a proposal to be attacked,
+Product name: **Ingot** (binaries `ingot`, `ingot-server`, `ingot-agent`; API group `ingot.sh`). See doc 12, D-4. Everything here is a proposal to be attacked,
 not a decision. The point of writing it down is to make the disagreements concrete.
 
 ---
@@ -29,12 +29,12 @@ not a decision. The point of writing it down is to make the disagreements concre
 │  GLOBAL HUB  (RKE2, 3 nodes, HA — customer-hosted or our SaaS)          │
 │                                                                         │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ forge-api        Tenant/Project/Catalog/RBAC/Audit/Billing (CRDs)  │  │
-│  │ forge-console    React UI  ·  forge CLI  ·  Terraform provider     │  │
+│  │ ingot-api        Tenant/Project/Catalog/RBAC/Audit/Billing (CRDs)  │  │
+│  │ ingot-console    React UI  ·  ingot CLI  ·  Terraform provider     │  │
 │  │ OCM hub          registration, Placement, ManifestWork, addons     │  │
-│  │ forge-tunnel     audited kubectl/exec proxy (remotedialer-based)   │  │
-│  │ forge-rollout    RolloutCampaign controller (TALM-class)           │  │
-│  │ forge-inventory  Sites, Racks, Machines, IPAM, fabric SoT          │  │
+│  │ ingot-tunnel     audited kubectl/exec proxy (remotedialer-based)   │  │
+│  │ ingot-rollout    RolloutCampaign controller (TALM-class)           │  │
+│  │ ingot-inventory  Sites, Racks, Machines, IPAM, fabric SoT          │  │
 │  │ catalog store    ClusterTemplates + AddonTemplates as OCI artifacts│  │
 │  │ Dex/Keycloak · cert-manager · OpenBao · VictoriaMetrics · Perses   │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
@@ -49,8 +49,8 @@ not a decision. The point of writing it down is to make the disagreements concre
 │                  │ │                  │ │  deployments)    │
 │ Metal3 BMO+Ironic│ │ …same…           │ └──────────────────┘
 │ CAPI + CAPM3     │ │                  │
-│ forge-firmware   │ │                  │   ← L3 engine (our code)
-│ forge-fabric     │ │                  │   ← L6 engine (our code)
+│ ingot-firmware   │ │                  │   ← L3 engine (our code)
+│ ingot-fabric     │ │                  │   ← L6 engine (our code)
 │ Zot mirror +     │ │                  │
 │   Spegel         │ │                  │
 │ Kamaji (hosted   │ │                  │
@@ -87,7 +87,7 @@ Organization           # the customer
 
 ### Inventory & metal
 ```yaml
-apiVersion: forge.io/v1alpha1
+apiVersion: ingot.sh/v1alpha1
 kind: Site                    # a datacenter / building / edge location
 spec:
   region: ap-south-1
@@ -139,7 +139,7 @@ status:
     - type: Ready
       status: "False"
       reason: FirmwareDrift
-      message: "3 BIOS attributes differ from profile gpu-h100-8x; run `forge machine remediate r07-u12`"
+      message: "3 BIOS attributes differ from profile gpu-h100-8x; run `ingot machine remediate r07-u12`"
 ```
 
 ### The L3 object — our first differentiator
@@ -188,7 +188,7 @@ spec:
   class: dc-standard            # edge-sno | edge-ha | dc-standard | hosted | virtual
   distro: rke2
   kubernetesVersion: "1.34.x"
-  osImage: oci://registry/forge/os/ubuntu-24.04-bootc:1.4.0
+  osImage: oci://registry/ingot/os/ubuntu-24.04-bootc:1.4.0
   controlPlane: {replicas: 3, placement: local}
   addons: [cilium, metallb, rook-ceph, monitoring-agent, kyverno-baseline]
   variables:
@@ -202,7 +202,7 @@ spec:
   siteRef: dc-mumbai
   values: {apiVip: 10.20.0.10}
   machineSelector:
-    matchLabels: {forge.io/pool: acme-gpu}
+    matchLabels: {ingot.sh/pool: acme-gpu}
   addonOverlayRefs: [acme-baseline, mumbai-region]
 status:
   phase: Ready
@@ -248,10 +248,10 @@ Implemented via **Sveltos + Flux** underneath; the user never sees a `ClusterPro
 **Flow A — DC, BMC reachable (the Metal3 path)**
 ```
 1. Import inventory (Nautobot / CSV / discovery scan of the mgmt subnet)
-2. Machine CR created → forge-inventory validates BMC creds
+2. Machine CR created → ingot-inventory validates BMC creds
 3. Ironic inspects  → full hardware inventory populated
-4. forge-fabric configures the switch ports (gNMI/NETCONF/eAPI)       ← L6
-5. forge-firmware compares to HardwareProfile → remediates → verifies ← L3
+4. ingot-fabric configures the switch ports (gNMI/NETCONF/eAPI)       ← L6
+5. ingot-firmware compares to HardwareProfile → remediates → verifies ← L3
 6. Ironic cleans disks (secure erase if the pool is multi-tenant)
 7. Deploy bootc OS image via Redfish VIRTUAL MEDIA (no DHCP needed)
 8. nmstate applies the network profile; node comes up addressable
@@ -264,7 +264,7 @@ Implemented via **Sveltos + Flux** underneath; the user never sees a `ClusterPro
 **Flow B — Edge, no BMC / no network path (the registration path)**
 ```
 1. Create a Site + RegistrationToken
-2. forge-imagebuild produces a site-specific installer (bootc/Kairos/Talos) with
+2. ingot-imagebuild produces a site-specific installer (bootc/Kairos/Talos) with
    the token, network config, and pre-pulled images baked in
 3. Ship the USB / serve the ISO / pre-image the appliance at the factory
 4. Technician powers it on; optional local browser UI to pick the site ID
@@ -281,7 +281,7 @@ one lifecycle, two on-ramps.
 
 Everything else is integration. These are the products.
 
-### `forge-firmware` (L3)
+### `ingot-firmware` (L3)
 Go service on the site controller. Uses `bmclib` + `gofish` + vendor CLIs
 (`racadm`, `ilorest`, `sum`, `OneCLI`) behind a driver interface.
 - Reconciles `HardwareProfile` → BMC.
@@ -292,7 +292,7 @@ Go service on the site controller. Uses `bmclib` + `gofish` + vendor CLIs
 - Emits a **signed compliance attestation** per node (in-toto/cosign): "at time T,
   node X matched profile P at digest D." Auditors and AI-cluster buyers both want this.
 
-### `forge-fabric` (L6)
+### `ingot-fabric` (L6)
 Go service. Drivers for SONiC, Arista (eAPI/gNMI), Cisco NX-OS (NX-API/gNMI),
 Juniper (NETCONF), Nokia SR Linux (gNMI); OpenConfig where possible.
 - Renders per-port intent from `Machine.spec.fabric` + `Site.spec.networks`.
@@ -303,7 +303,7 @@ Juniper (NETCONF), Nokia SR Linux (gNMI); OpenConfig where possible.
 - Ships as **opt-in**, read-only by default. This is how we earn trust with the network
   team rather than getting banned by them.
 
-### `forge-rollout` (L11)
+### `ingot-rollout` (L11)
 Go controller implementing `RolloutCampaign`. Distro-agnostic, air-gap-aware,
 resumable across hub restarts, with the pre-cache + backup + verify + abort semantics
 above. Covers OS, Kubernetes, addons, and firmware as campaign types.
@@ -329,7 +329,7 @@ Metal3 virtual-media provisioning of a bootc image; RKE2 via CAPI; Cilium; one C
 Single tier (hub == site). *Goal: the 30-minute demo, in the virtual lab.*
 
 **Milestone 2 — the differentiator (months 3–5).**
-`forge-firmware` remediation + quirks DB for **one** real vendor (Dell iDRAC9 is the
+`ingot-firmware` remediation + quirks DB for **one** real vendor (Dell iDRAC9 is the
 best-documented) + signed attestation. Rent real hardware. *Goal: the demo on metal,
 with the compliance report.*
 
@@ -353,8 +353,8 @@ Windows nodes, and anything telco-RAN-specific.
 
 | Tier | Contents | License |
 |---|---|---|
-| **forge-core** (OSS) | CRDs, provisioning (Metal3/Tinkerbell), CAPI integration, OS images, addons, CLI, single-site, single-tenant, `HardwareProfile` **detection** | **Apache 2.0** |
-| **forge-enterprise** | Multi-tenancy + quota + metering, SSO/SAML, audited tunnel, `RolloutCampaign`, firmware **remediation** + attestation, `forge-fabric`, air-gap bundles, FIPS/STIG builds, multi-site, support | commercial |
+| **ingot-core** (OSS) | CRDs, provisioning (Metal3/Tinkerbell), CAPI integration, OS images, addons, CLI, single-site, single-tenant, `HardwareProfile` **detection** | **Apache 2.0** |
+| **ingot-enterprise** | Multi-tenancy + quota + metering, SSO/SAML, audited tunnel, `RolloutCampaign`, firmware **remediation** + attestation, `ingot-fabric`, air-gap bundles, FIPS/STIG builds, multi-site, support | commercial |
 
 The OSS tier must be **completely sufficient for one team running one site.** That's
 what drives adoption and gives us the distribution a solo founder otherwise can't buy.

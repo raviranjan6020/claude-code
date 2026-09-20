@@ -1,9 +1,13 @@
-# Bare-Metal → Kubernetes, Hub-and-Spoke: Research & Design
+# Ingot
 
-Working notes for a B2B platform that turns racked servers into multi-tenant Kubernetes
-(and VMs), managed as a fleet from a central hub, connected or air-gapped.
+A B2B platform that turns racked servers into multi-tenant Kubernetes (and VMs),
+managed as a fleet from a central hub, connected or air-gapped.
 
-**Status:** research phase. No product code yet, by design.
+*An ingot is metal that has been refined, assayed, and cast to a known standard —
+which is what this does to a rack of unknown servers.*
+
+**Status:** research complete; starting the platform-layer build.
+Current plan → [13 — P2 build plan](docs/design/13-p2-build-plan.md).
 
 ## Contents
 
@@ -24,8 +28,10 @@ Working notes for a B2B platform that turns racked servers into multi-tenant Kub
 ### Design — our own product
 | Doc | What it covers |
 |---|---|
-| [10 — Reference architecture v0](docs/design/10-our-architecture-v0.md) | Topology, our CRDs, the three engines we'd actually write, MVP milestones, licensing |
-| [11 — Lab & open questions](docs/design/11-lab-and-open-questions.md) | How to run all of this with zero hardware, 15 lab exercises, and the 8 decisions that are yours |
+| [10 — Reference architecture v0](docs/design/10-our-architecture-v0.md) | Topology, our CRDs, the three engines we'd actually write, licensing |
+| [11 — Lab & open questions](docs/design/11-lab-and-open-questions.md) | Zero-hardware lab (libvirt + sushy-tools), 15 graded exercises — now the opening of P1 |
+| [12 — Decisions](docs/design/12-decisions-and-plan.md) | D-1…D-6, and why each was taken |
+| [13 — **P2 build plan**](docs/design/13-p2-build-plan.md) | **The executable plan.** Done test, architecture, scope + NOT-list, 6 phases, cost |
 
 ## The short version
 
@@ -42,13 +48,17 @@ closest competitor. Sidero has the best engineering and the narrowest scope.
 
 Those three, plus table-stakes tenancy and audited access, is the product.
 
-## Decisions so far
+## Decisions
 
-See [12 — Decisions & plan](docs/design/12-decisions-and-plan.md).
+| | Decision |
+|---|---|
+| **D-1** | **Beachhead deferred** — build the generic engine; the first design partner picks the vertical |
+| **D-2** | **GTM: services-first** with a design partner; tooling stays open source |
+| **D-3** | **Network fabric: verify, never configure.** Host-side LLDP cable-map verification only. Netris owns the write path and Mirantis partners with them rather than building it — that is the market answering the question |
+| **D-4** | **Name: Ingot.** `github.com/<org>/ingot`, API group `ingot.sh/v1alpha1` |
+| **D-5** | **P2 (platform) first, then P1 (metal + firmware)** — reverses the earlier recommendation; risks accepted and mitigated by a hard 10-week timebox |
+| **D-6** | **Tiers: global / regional / site.** Deploy two, model three. One binary, `--tier=` selects controller sets, so collapsing is a flag not a rewrite |
 
-- **Beachhead: deferred** — build the generic engine; the first design partner picks the vertical.
-- **GTM: services-first** with a design partner; tooling stays open source.
-- Structurally this means: a **spine** (everything below the vertical, ~80% of the work)
-  plus **packs** (`gpu`, `virt`, `sovereign`) built only when a client pays for one.
-- **Network fabric: verify, never configure.** Host-side LLDP cable-map verification only; partner for the write path.
-- Guard rail: every hour of client work lands in the spine or a pack. Never a client fork.
+Structurally: a **spine** (everything below the vertical, ~80% of the work) plus
+**packs** (`gpu`, `virt`, `sovereign`) built only when a client pays for one.
+Guard rail: every hour of client work lands in the spine or a pack — never a client fork.
